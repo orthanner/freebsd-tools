@@ -1,0 +1,12 @@
+unicorn_enable="YES"
+unicorn_profiles=""
+
+for p in $(grep -rlE '^unicorn_[0-9a-zA-Z]+_enabled="[Yy][Ee][Ss]"$' /usr/local/etc/unicorn.d); do
+	bn=$(basename $p)
+	if [ -n "$unicorn_profiles" ]; then
+		unicorn_profiles="$unicorn_profiles $bn"
+	else
+		unicorn_profiles="$bn"
+	fi
+	. $p
+done

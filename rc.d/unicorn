@@ -1,0 +1,105 @@
+#!/bin/sh
+#
+#
+# PROVIDE: unicorn
+# REQUIRE: DAEMON
+# KEYWORD: shutdown
+#
+# Add the following lines to /etc/rc.conf to enable unicorn:
+#
+# unicorn_enable (bool):		Set it to "YES" to enable unicorn
+#				Default is "NO".
+# unicorn_socket (path/str):	Set the path to the unicorn unix socket
+#				Default is /tmp/unicorn.sock.
+# unicorn_flags (str):		Set the unicorn command line arguments
+#				Default is "".
+# unicorn_procname (str):		Define to "unicorn" if you start unicorn with
+#				--auto-procname option.
+#
+# If you would like to have multiple unicorn instances running, you can
+# define multiple profiles:
+#
+# unicorn_profiles (str):		Set the list of unicorn profiles
+#				Default is "".
+#
+# For each profile you can then define different options (except for
+# unicorn_enable) using the syntax unicorn_<profile>_<option>
+
+. /etc/rc.subr
+
+name="unicorn"
+rcvar=${name}_enable
+
+load_rc_config $name
+
+command=/usr/local/bin/unicorn
+: ${unicorn_enable="NO"}
+: ${unicorn_profiles=""}
+: ${unicorn_socket="/tmp/$name.sock"}
+: ${unicorn_environment="production"}
+: ${unicorn_flags=""}
+: ${unicorn_procname="/usr/local/bin/ruby19"}
+: ${unicorn_user="www"}
+: ${unicorn_rails="NO"}
+
+is_unicorn_profile() {
+    local profile
+
+    for profile in $unicorn_profiles; do
+        if [ "$profile" = "$1" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+if [ -n "${unicorn_profiles}" ]; then
+	if [ -n "$2" ]; then
+		profile="$2"
+		if ! is_unicorn_profile $profile; then
+			echo "$0: no such profile defined in unicorn_profiles."
+		    exit 1
+		fi
+		eval unicorn_socket=\${unicorn_${profile}_socket:-"/tmp/${name}-${profile}.sock"}
+		eval unicorn_config=\${unicorn_${profile}_config}
+		eval unicorn_dir=\${unicorn_${profile}_dir}
+		eval unicorn_flags=\${unicorn_${profile}_flags:-"${unicorn_flags}"}
+		eval unicorn_environment=\${unicorn_${profile}_environment:-"${unicorn_environment}"}
+		eval unicorn_rails=\${unicorn_${profile}_rails:-"${unicorn_rails}"}
+		eval unicorn_user=\${unicorn_${profile}_user:-"${unicorn_user}"}
+		eval unicorn_procname=\${unicorn_${profile}_procname:-"${unicorn_procname}"}
+	elif [ -n "$1" ]; then
+		for profile in ${unicorn_profiles}; do
+	        echo "Processing ${name} profile: ${profile}"
+	        /usr/local/etc/rc.d/unicorn $1 ${profile}
+	    done
+	    exit 0
+	fi
+fi
+
+if checkyesno unicorn_rails; then
+	command=/usr/local/bin/unicorn_rails
+else
+	command=/usr/local/bin/unicorn
+fi
+
+command_args="-l ${unicorn_socket} -D -E ${unicorn_environment} ${unicorn_flags}"
+start_cmd=start_cmd
+extra_commands="reload status"
+procname=${unicorn_procname}
+pidfile=$unicorn_dir/tmp/pids/unicorn.pid
+sig_reload=USR2
+sig_stop=TERM
+
+start_cmd()
+{
+	dir=$(pwd)
+	cd "$unicorn_dir" || return 1
+	/usr/local/bin/sudo -u $unicorn_user ${command} ${command_args}
+	rc=$?
+	cd "$dir"
+	return $rc
+}
+
+run_rc_command "$1"
