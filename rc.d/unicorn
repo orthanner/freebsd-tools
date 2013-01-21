@@ -95,7 +95,7 @@ sig_reload=USR2
 sig_stop=TERM
 
 if checkyesno unicorn_bundler; then
-	command="$(basename $command)"
+#	command="$(basename $command)"
 	command_args="exec ${command} ${command_args}"
 	command=/usr/local/bin/bundle
 fi
