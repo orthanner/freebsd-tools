@@ -41,6 +41,7 @@ command=/usr/local/bin/unicorn
 : ${unicorn_procname="/usr/local/bin/ruby19"}
 : ${unicorn_user="www"}
 : ${unicorn_rails="NO"}
+: ${unicorn_bundler="NO"}
 
 is_unicorn_profile() {
     local profile
@@ -69,6 +70,7 @@ if [ -n "${unicorn_profiles}" ]; then
 		eval unicorn_rails=\${unicorn_${profile}_rails:-"${unicorn_rails}"}
 		eval unicorn_user=\${unicorn_${profile}_user:-"${unicorn_user}"}
 		eval unicorn_procname=\${unicorn_${profile}_procname:-"${unicorn_procname}"}
+		eval unicorn_procname=\${unicorn_${profile}_bundler:-"${unicorn_bundler}"}
 	elif [ -n "$1" ]; then
 		for profile in ${unicorn_profiles}; do
 	        echo "Processing ${name} profile: ${profile}"
@@ -91,6 +93,12 @@ procname=${unicorn_procname}
 pidfile=$unicorn_dir/tmp/pids/unicorn.pid
 sig_reload=USR2
 sig_stop=TERM
+
+if checkyesno unicorn_bundler; then
+	command="$(basename $command)"
+	command_args="exec ${command} ${command_args}"
+	command=/usr/local/bin/bundle
+fi
 
 start_cmd()
 {
