@@ -75,6 +75,9 @@ if [ -n "${unicorn_profiles}" ]; then
 		eval unicorn_bundler=\${unicorn_${profile}_bundler:-"${unicorn_bundler}"}
 		eval unicorn_rvm=\${unicorn_${profile}_rvm:-"${unicorn_rvm}"}
 		eval unicorn_ruby=\${unicorn_${profile}_ruby:-"${unicorn_ruby}"}
+		if checkyesno unicorn_rvm; then
+			unicorn_procname="~${unicorn_user}/.rvm/rubies/ruby-${unicorn_ruby}/bin/ruby"
+		fi
 	elif [ -n "$1" ]; then
 		for profile in ${unicorn_profiles}; do
 	        echo "Processing ${name} profile: ${profile}"
