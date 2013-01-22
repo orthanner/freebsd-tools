@@ -42,6 +42,8 @@ command=/usr/local/bin/unicorn
 : ${unicorn_user="www"}
 : ${unicorn_rails="NO"}
 : ${unicorn_bundler="NO"}
+: ${unicorn_rvm="NO"}
+: ${unicorn_ruby="1.9.3-head"}
 
 is_unicorn_profile() {
     local profile
@@ -70,7 +72,9 @@ if [ -n "${unicorn_profiles}" ]; then
 		eval unicorn_rails=\${unicorn_${profile}_rails:-"${unicorn_rails}"}
 		eval unicorn_user=\${unicorn_${profile}_user:-"${unicorn_user}"}
 		eval unicorn_procname=\${unicorn_${profile}_procname:-"${unicorn_procname}"}
-		eval unicorn_procname=\${unicorn_${profile}_bundler:-"${unicorn_bundler}"}
+		eval unicorn_bundler=\${unicorn_${profile}_bundler:-"${unicorn_bundler}"}
+		eval unicorn_rvm=\${unicorn_${profile}_rvm:-"${unicorn_rvm}"}
+		eval unicorn_ruby=\${unicorn_${profile}_ruby:-"${unicorn_ruby}"}
 	elif [ -n "$1" ]; then
 		for profile in ${unicorn_profiles}; do
 	        echo "Processing ${name} profile: ${profile}"
@@ -95,7 +99,11 @@ sig_reload=USR2
 sig_stop=TERM
 
 if checkyesno unicorn_bundler; then
-#	command="$(basename $command)"
+	if checkyesno unicorn_rails; then
+		command=unicorn_rails
+	else
+		command=unicorn
+	fi
 	command_args="exec ${command} ${command_args}"
 	command=/usr/local/bin/bundle
 fi
@@ -104,8 +112,18 @@ start_cmd()
 {
 	dir=$(pwd)
 	cd "$unicorn_dir" || return 1
-	/usr/local/bin/sudo -u $unicorn_user ${command} ${command_args}
-	rc=$?
+	if checkyesno unicorn_rvm; then
+		if [ -d "~${unicorn_user}/.rvm/${unicorn_ruby}" ]; then
+			/usr/local/bin/sudo -u $unicorn_user /usr/local/bin/unicorn-wrapper ${unicorn_ruby} ${command} ${command_args}
+			rc=$?
+		else
+			echo "Ruby version ${unicorn_ruby} not found by RVM for user ${unicorn_user}"
+			rc=1
+		fi
+	else
+		/usr/local/bin/sudo -u $unicorn_user ${command} ${command_args}
+		rc=$?
+	fi
 	cd "$dir"
 	return $rc
 }
