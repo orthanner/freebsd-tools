@@ -117,7 +117,7 @@ start_cmd()
 	cd "$unicorn_dir" || return 1
 	if checkyesno unicorn_rvm; then
 		if [ -d "~${unicorn_user}/.rvm/${unicorn_ruby}" ]; then
-			/usr/local/bin/sudo -u $unicorn_user /usr/local/bin/unicorn-wrapper ${unicorn_ruby} ${command} ${command_args}
+			/usr/local/bin/sudo -u $unicorn_user /usr/local/bin/unicorn-wrapper ${unicorn_ruby} $(basename ${command}) ${command_args}
 			rc=$?
 		else
 			echo "Ruby version ${unicorn_ruby} not found by RVM for user ${unicorn_user}"
