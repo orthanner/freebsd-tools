@@ -81,7 +81,7 @@ if [ -n "${unicorn_profiles}" ]; then
 	elif [ -n "$1" ]; then
 		for profile in ${unicorn_profiles}; do
 	        echo "Processing ${name} profile: ${profile}"
-	        /usr/local/etc/rc.d/unicorn $1 ${profile}
+	        $0 $1 ${profile}
 	    done
 	    exit 0
 	fi
