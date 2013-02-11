@@ -102,12 +102,7 @@ sig_reload=USR2
 sig_stop=TERM
 
 if checkyesno unicorn_bundler; then
-	if checkyesno unicorn_rails; then
-		command=unicorn_rails
-	else
-		command=unicorn
-	fi
-	command_args="exec ${command} ${command_args}"
+	command_args="exec $(basename ${command}) ${command_args}"
 	command=/usr/local/bin/bundle
 fi
 
@@ -116,8 +111,10 @@ start_cmd()
 	dir=$(pwd)
 	cd "$unicorn_dir" || return 1
 	if checkyesno unicorn_rvm; then
-		if [ -d "~${unicorn_user}/.rvm/ruby-${unicorn_ruby}" ]; then
-			/usr/local/bin/sudo -u $unicorn_user /usr/local/bin/unicorn-wrapper ${unicorn_ruby} $(basename ${command}) ${command_args}
+		d="$(grep ^${unicorn_user}: /etc/passwd | awk -F : '{ print $6; }')/.rvm/rubies/ruby-${unicorn_ruby}"
+		echo $d
+		if [ -d $d ]; then
+			/usr/local/bin/sudo -u $unicorn_user /usr/local/bin/bash /usr/local/bin/unicorn-wrapper ${unicorn_ruby} $(basename ${command}) ${command_args}
 			rc=$?
 		else
 			echo "Ruby version ${unicorn_ruby} not found by RVM for user ${unicorn_user}"

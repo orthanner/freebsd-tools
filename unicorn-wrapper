@@ -1,12 +1,23 @@
-#!/bin/sh
+#!/usr/local/bin/bash
 
 set -u
 set -e
 
 ruby=$1
 shift
+export SHELL=/usr/local/bin/bash
+PATH=$HOME/.rvm/bin:$PATH
 
-source ~/.rvm/scripts/rvm
+if [ -s $HOME/.rvm/scripts/rvm ]; then
+	. $HOME/.rvm/scripts/rvm
+	echo RVM loaded
+	if [ -d $HOME/.rvm/environments/ruby-${ruby} ]; then
+		. $HOME/.rvm/environments/ruby-${ruby}
+		echo Ruby initialized
+	fi
+fi
+
+echo $HOME
 
 rvm use $ruby
 
