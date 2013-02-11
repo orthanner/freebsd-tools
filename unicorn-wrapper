@@ -6,10 +6,6 @@ set -e
 ruby=$1
 shift
 
-#GEM_HOME=~/.rvm/gems/ruby-${ruby}
-#PATH=~/.rvm/rubies/ruby-${ruby}/bin:$GEM_HOME/bin:$PATH
-#export GEM_HOME PATH
-
 source ~/.rvm/scripts/rvm
 
 rvm use $ruby

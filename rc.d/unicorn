@@ -116,7 +116,7 @@ start_cmd()
 	dir=$(pwd)
 	cd "$unicorn_dir" || return 1
 	if checkyesno unicorn_rvm; then
-		if [ -d "~${unicorn_user}/.rvm/${unicorn_ruby}" ]; then
+		if [ -d "~${unicorn_user}/.rvm/ruby-${unicorn_ruby}" ]; then
 			/usr/local/bin/sudo -u $unicorn_user /usr/local/bin/unicorn-wrapper ${unicorn_ruby} $(basename ${command}) ${command_args}
 			rc=$?
 		else
