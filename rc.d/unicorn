@@ -114,7 +114,7 @@ start_cmd()
 		d="$(grep ^${unicorn_user}: /etc/passwd | awk -F : '{ print $6; }')/.rvm/rubies/ruby-${unicorn_ruby}"
 		echo $d
 		if [ -d $d ]; then
-			/usr/local/bin/sudo -u $unicorn_user /usr/local/bin/bash /usr/local/bin/unicorn-wrapper ${unicorn_ruby} $(basename ${command}) ${command_args}
+			/usr/local/bin/sudo -u $unicorn_user /usr/bin/env SHELL=/usr/local/bin/bash CDPATH=. ZSH_VERSION="" /usr/local/bin/bash /usr/local/bin/unicorn-wrapper ${unicorn_ruby} $(basename ${command}) ${command_args}
 			rc=$?
 		else
 			echo "Ruby version ${unicorn_ruby} not found by RVM for user ${unicorn_user}"
