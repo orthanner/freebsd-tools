@@ -1,6 +1,6 @@
 #!/usr/local/bin/bash
 
-env
+#env
 #exit
 
 set -u
@@ -10,12 +10,18 @@ ruby=$1
 shift
 PATH=$HOME/.rvm/bin:$PATH
 
-if [ -s $HOME/.rvm/environments/ruby-${ruby} ]; then
-	. $HOME/.rvm/environments/ruby-${ruby}
-	echo Ruby initialized
+if [ -s $HOME/.rvm/scripts/rvm ]; then
+#	. $HOME/.rvm/scripts/rvm
+#	echo RVM loaded
+	if [ -s $HOME/.rvm/environments/ruby-${ruby} ]; then
+		. $HOME/.rvm/environments/ruby-${ruby}
+#		echo Ruby initialized
+	fi
 fi
 
-echo $HOME
+#echo $HOME
+
+#rvm use $ruby
 
 command=$1
 shift
