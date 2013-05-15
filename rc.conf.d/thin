@@ -1,0 +1,12 @@
+thin_enable="YES"
+thin_profiles=""
+
+for p in $(grep -rlE '^thin_[0-9a-zA-Z]+_enabled="[Yy][Ee][Ss]"$' /usr/local/etc/thin.d); do
+	bn=$(basename $p)
+	if [ -n "$thin_profiles" ]; then
+		thin_profiles="$thin_profiles $bn"
+	else
+		thin_profiles="$bn"
+	fi
+	. $p
+done

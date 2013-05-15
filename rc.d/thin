@@ -1,0 +1,202 @@
+#!/bin/sh
+#
+#
+# PROVIDE: thin
+# REQUIRE: DAEMON
+# KEYWORD: shutdown
+#
+# Add the following lines to /etc/rc.conf to enable thin:
+#
+# thin_enable (bool):		Set it to "YES" to enable thin
+#				Default is "NO".
+# thin_socket (path/str):	Set the path to the thin unix socket
+#				Default is /tmp/thin.sock.
+# thin_flags (str):		Set the thin command line arguments
+#				Default is "".
+# thin_procname (str):		Define to "thin" if you start thin with
+#				--auto-procname option.
+#
+# If you would like to have multiple thin instances running, you can
+# define multiple profiles:
+#
+# thin_profiles (str):		Set the list of thin profiles
+#				Default is "".
+#
+# For each profile you can then define different options (except for
+# thin_enable) using the syntax thin_<profile>_<option>
+
+. /etc/rc.subr
+
+name="thin"
+rcvar=${name}_enable
+
+load_rc_config $name
+
+command=/usr/local/bin/thin
+: ${thin_enable="NO"}
+: ${thin_profiles=""}
+: ${thin_socket="/tmp/$name.sock"}
+: ${thin_environment="production"}
+: ${thin_flags=""}
+: ${thin_procname="/usr/local/bin/ruby19"}
+: ${thin_user="www"}
+: ${thin_rails="NO"}
+: ${thin_bundler="NO"}
+: ${thin_rvm="NO"}
+: ${thin_ruby="1.9.3-head"}
+: ${thin_adapter="autodetect"}
+: ${thin_socket=""}
+: ${thin_address=""}
+: ${thin_port=""}
+: ${thin_rackup=""}
+: ${thin_ssl="NO"}
+: ${thin_ssl_key=""}
+: ${thin_ssl_cert=""}
+: ${thin_procnum="1"}
+: ${thin_log="/var/log/$name/log"}
+: ${thin_pid="/var/run/$name/pid"}
+: ${thin_tag="thin"}
+
+is_thin_profile() {
+    local profile
+
+    for profile in $thin_profiles; do
+        if [ "$profile" = "$1" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+if [ -n "${thin_profiles}" ]; then
+	if [ -n "$2" ]; then
+		profile="$2"
+		if ! is_thin_profile $profile; then
+			echo "$0: no such profile defined in thin_profiles."
+		    exit 1
+		fi
+		eval thin_socket=\${thin_${profile}_socket:-"/tmp/${name}-${profile}.sock"}
+		eval thin_config=\${thin_${profile}_config}
+		eval thin_dir=\${thin_${profile}_dir}
+		eval thin_flags=\${thin_${profile}_flags:-"${thin_flags}"}
+		eval thin_environment=\${thin_${profile}_environment:-"${thin_environment}"}
+		eval thin_rails=\${thin_${profile}_rails:-"${thin_rails}"}
+		eval thin_user=\${thin_${profile}_user:-"${thin_user}"}
+		eval thin_procname=\${thin_${profile}_procname:-"${thin_procname}"}
+		eval thin_bundler=\${thin_${profile}_bundler:-"${thin_bundler}"}
+		eval thin_rvm=\${thin_${profile}_rvm:-"${thin_rvm}"}
+		eval thin_ruby=\${thin_${profile}_ruby:-"${thin_ruby}"}
+		eval thin_adapter=\${thin_${profile}_adapter:-"${thin_adapter}"}
+		eval thin_socket=\${thin_${profile}_socket:-"${thin_socket}"}
+		eval thin_address=\${thin_${profile}_address:-"${thin_address}"}
+		eval thin_port=\${thin_${profile}_port:-"${thin_port}"}
+		eval thin_rackup=\${thin_${profile}_rackup:-"${thin_rackup}"}
+		eval thin_ssl=\${thin_${profile}_ssl:-"${thin_ssl}"}
+		eval thin_ssl_key=\${thin_${profile}_ssl_key:-"${thin_ssl_key}"}
+		eval thin_ssl_cert=\${thin_${profile}_ssl_cert:-"${thin_ssl_cert}"}
+		eval thin_procnum=\${thin_${profile}_procnum:-"${thin_procnum}"}
+		eval thin_log=\${thin_${profile}_log:-"${thin_log}"}
+		eval thin_pid=\${thin_${profile}_pid:-"${thin_pid}"}
+		eval thin_tag=\${thin_${profile}_tag:-"${thin_tag}"}
+		if checkyesno thin_rvm; then
+			thin_procname="~${thin_user}/.rvm/rubies/ruby-${thin_ruby}/bin/ruby"
+		fi
+	elif [ -n "$1" ]; then
+		for profile in ${thin_profiles}; do
+	        echo "Processing ${name} profile: ${profile}"
+	        $0 $1 ${profile}
+	    done
+	    exit 0
+	fi
+fi
+
+if checkyesno thin_rails; then
+	command=/usr/local/bin/thin_rails
+else
+	command=/usr/local/bin/thin
+fi
+
+command_args="-d"
+
+if [ -n "$thin_adapter" ]; then
+	command_args="$command_args --adapter $thin_adapter"
+fi
+
+if [ -n "$thin_socket" ]; then
+	command_args="$command_args --socket $thin_socket"
+fi
+
+if [ -n "$thin_address" ]; then
+	command_args="$command_args --address $thin_address"
+fi
+
+if [ -n "$thin_port" ]; then
+	command_args="$command_args --port $thin_port"
+fi
+
+if [ -n "$thin_rackup" ]; then
+	command_args="$command_args --rackup $thin_rackup"
+fi
+
+if [ -n "$thin_environment" ]; then
+	command_args="$command_args --environment $thin_environment"
+fi
+
+if [ -n "$thin_tag" ]; then
+	command_args="$command_args --tag $thin_tag"
+fi
+
+if checkyesno thin_ssl; then
+	command_args="$command_args --ssl"
+	if [ -r "$thin_ssl_key" ]; then
+		command_args="$command_args --ssl-key-file $thin_ssl_key"
+	fi
+	if [ -r "$thin_ssl_cert" ]; then
+		command_args="$command_args --ssl-cert-file $thin_ssl_cert"
+	fi
+fi
+
+if [ -n "$thin_pid" ]; then
+	command_args="$command_args --pid $thin_pid"
+fi
+
+if [ -n "$thin_log" ]; then
+	command_args="$command_args --log $thin_log"
+fi
+
+start_cmd=start_cmd
+extra_commands="reload status"
+procname=${thin_procname}
+pidfile=$thin_pid
+sig_reload=USR2
+sig_stop=TERM
+
+if checkyesno thin_bundler; then
+	command_args="exec $(basename ${command}) ${command_args}"
+	command=/usr/local/bin/bundle
+fi
+
+start_cmd()
+{
+	dir=$(pwd)
+	cd "$thin_dir" || return 1
+	if checkyesno thin_rvm; then
+		d="$(grep ^${thin_user}: /etc/passwd | awk -F : '{ print $6; }')/.rvm/rubies/ruby-${thin_ruby}"
+		echo $d
+		if [ -d $d ]; then
+			/usr/local/bin/sudo -u $thin_user /usr/bin/env SHELL=/usr/local/bin/bash CDPATH=. ZSH_VERSION="" /usr/local/bin/bash /usr/local/bin/rvm-wrapper ${thin_ruby} $(basename ${command}) ${command_args}
+			rc=$?
+		else
+			echo "Ruby version ${thin_ruby} not found by RVM for user ${thin_user}"
+			rc=1
+		fi
+	else
+		/usr/local/bin/sudo -u $thin_user ${command} ${command_args}
+		rc=$?
+	fi
+	cd "$dir"
+	return $rc
+}
+
+run_rc_command "$1"
