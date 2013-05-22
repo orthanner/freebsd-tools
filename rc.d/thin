@@ -44,7 +44,7 @@ command=/usr/local/bin/thin
 : ${thin_bundler="NO"}
 : ${thin_rvm="NO"}
 : ${thin_ruby="1.9.3-head"}
-: ${thin_adapter="autodetect"}
+: ${thin_adapter=""}
 : ${thin_socket=""}
 : ${thin_address=""}
 : ${thin_port=""}
@@ -73,7 +73,7 @@ if [ -n "${thin_profiles}" ]; then
 	if [ -n "$2" ]; then
 		profile="$2"
 		if ! is_thin_profile $profile; then
-			echo "$0: no such profile defined in thin_profiles."
+			echo "$2: no such profile defined in thin_profiles."
 		    exit 1
 		fi
 		eval thin_socket=\${thin_${profile}_socket:-"/tmp/${name}-${profile}.sock"}
@@ -96,9 +96,9 @@ if [ -n "${thin_profiles}" ]; then
 		eval thin_ssl_key=\${thin_${profile}_ssl_key:-"${thin_ssl_key}"}
 		eval thin_ssl_cert=\${thin_${profile}_ssl_cert:-"${thin_ssl_cert}"}
 		eval thin_procnum=\${thin_${profile}_procnum:-"${thin_procnum}"}
-		eval thin_log=\${thin_${profile}_log:-"${thin_log}"}
-		eval thin_pid=\${thin_${profile}_pid:-"${thin_pid}"}
-		eval thin_tag=\${thin_${profile}_tag:-"${thin_tag}"}
+		eval thin_log=\${thin_${profile}_log:-"${thin_log}.${profile}"}
+		eval thin_pid=\${thin_${profile}_pid:-"${thin_pid}.${profile}"}
+		eval thin_tag=\${thin_${profile}_tag:-"${thin_tag}.${profile}"}
 		if checkyesno thin_rvm; then
 			thin_procname="~${thin_user}/.rvm/rubies/ruby-${thin_ruby}/bin/ruby"
 		fi
@@ -177,7 +177,7 @@ if checkyesno thin_bundler; then
 	command=/usr/local/bin/bundle
 fi
 
-start_cmd()
+run()
 {
 	dir=$(pwd)
 	cd "$thin_dir" || return 1
@@ -185,7 +185,7 @@ start_cmd()
 		d="$(grep ^${thin_user}: /etc/passwd | awk -F : '{ print $6; }')/.rvm/rubies/ruby-${thin_ruby}"
 		echo $d
 		if [ -d $d ]; then
-			/usr/local/bin/sudo -u $thin_user /usr/bin/env SHELL=/usr/local/bin/bash CDPATH=. ZSH_VERSION="" /usr/local/bin/bash /usr/local/bin/rvm-wrapper ${thin_ruby} $(basename ${command}) ${command_args}
+			/usr/local/bin/sudo -u $thin_user /usr/bin/env SHELL=/usr/local/bin/bash CDPATH=. ZSH_VERSION="" /usr/local/bin/bash /usr/local/bin/rvm-wrapper ${thin_ruby} $(basename ${command}) ${command_args} $1
 			rc=$?
 		else
 			echo "Ruby version ${thin_ruby} not found by RVM for user ${thin_user}"
@@ -196,7 +196,21 @@ start_cmd()
 		rc=$?
 	fi
 	cd "$dir"
+	echo $rc
 	return $rc
 }
+start_cmd()
+{
+	run start
+}
+stop_cmd()
+{
+	run stop
+}
+restart_cmd()
+{
+	run restart
+}
+
 
 run_rc_command "$1"
