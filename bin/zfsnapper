@@ -1,0 +1,103 @@
+#!/usr/bin/ruby
+require "getoptlong"
+require "pathname"
+require "fileutils"
+require 'rubygems'
+require 'date'
+require 'yaml'
+
+include Process
+
+# Выводит справку по использованию скрипта
+def help
+	puts <<-END
+Valid options are:
+	-f file, --config file\t load specified config instead of /usr/local/etc/zfsnapper.yml
+	-h, --help\t print this message
+	-t snapshot_type, --type snapshot_type\t snapshot type
+By default, the following snapshot types are supported: daily|weekly|monthly|yearly
+Custom snapshot types may be specified in config file
+	END
+end
+
+class App
+	ZFS_LINE = /^[^@]+\t .+\t auto:snap\t on.+$/
+	def config
+		@config
+	end
+
+# Конструктор. Читает указанный файл, парсит его и устанавливает время хранения снимков исходя из полученных данных. Если файл не существует, используются значения по умолчанию
+	def initialize(configFile)
+		@config = {'daily' => 8, 'weekly' => 5, 'monthly' => 12, 'yearly' => 2}
+		@now = DateTime.now.to_date
+		@config.merge!(YAML.load_file(configFile)) if configFile and configFile.readable?
+	end
+
+	def list(type)
+		filesystems = {}
+		cmd = ["zfs", "list", "-H", "-o", "name,auto:snap", "-t", type.to_s]
+		IO.popen cmd do |result|
+			result.each_line do |line|
+				split = line.split("\t")
+				filesystems[split[0]] = split[1].strip
+			end
+		end
+		filesystems
+	end
+	
+	def snapshot(fsname, type)
+		if @config.has_key? type.to_sym
+			wait(spawn("zfs", "snapshot", "-o", "auto:snap=#{@now}", "#{fsname}@#{type}.#{@now}"))
+			result = ($?.exitstatus == 0)
+			clear fsname, type if result
+			result
+		else
+			raise ArgumentError("Unsupported snapshot type: #{type}")
+		end
+	end
+	
+	def clear(fsname, type)
+		keys = list(:snapshot).select { |fs| fs.start_with? "#{fsname}@" }.keys.sort
+		while keys.length > @config[type]
+			k = keys.slice!(0)
+			print k, ": "
+			wait(spawn("zfs", "destroy", k))
+			puts $?.exitstatus
+		end
+	end
+
+end
+
+parser = GetoptLong.new
+parser.set_options ['-t', '--type', GetoptLong::REQUIRED_ARGUMENT], ['-f', '--config', GetoptLong::REQUIRED_ARGUMENT], ['-h', '--help', GetoptLong::NO_ARGUMENT]
+configFile = Pathname.new '/usr/local/etc/zfsnapper.yml'
+type = nil
+begin
+	parser.each do |opt, arg|
+		case opt
+			when '-f'
+				configFile = Pathname.new arg
+			when '-t'
+				type = arg
+			when '-h'
+				help
+				exit
+		end
+	end
+rescue => error
+	puts error
+	help
+	exit
+end
+app = App.new configFile
+if type
+	begin
+		app.list(:filesystem).select { |fs, snap| snap == "on" }.each_key { |fs| app.snapshot fs, type }
+	rescue ArgumentError => e
+		puts e
+		help
+	end
+else
+	puts "Snapshot type is not specified"
+	help
+end
