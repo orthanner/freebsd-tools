@@ -5,6 +5,7 @@ require "fileutils"
 require "open-uri"
 require "net/http"
 require 'net/sftp'
+require 'net/ftp'
 
 include Process
 
@@ -115,8 +116,17 @@ loop do
       uri = URI(arg)
       if uri.scheme then
         install = "/tmp/#{rand(36**10).to_s(36)}"
-        if scheme == 'sftp' then
-        else
+        case uri.scheme
+          when 'sftp'
+          puts "SFTP is currently unsupported"
+          exit 1
+          when 'ftp'
+          Net::FTP.open(uri.host) do |ftp|
+            ftp.login
+            ftp.getbinaryfile(uri.path, install)
+            ftp.close
+          end
+          else
           if (fetch(uri, install)) then
             puts "Unable to download file #{uri}"
             exit 1
