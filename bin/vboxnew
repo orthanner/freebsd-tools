@@ -86,8 +86,8 @@ def fetch(uri, dst, limit = 10)
 end
 
 def launch (args)
-	wait(spawn(args))
-	$?.exitstatus
+  wait(IO.popen(args).pid)
+  $?.exitstatus
 end
 
 loop do
@@ -117,7 +117,7 @@ loop do
         install = "/tmp/#{rand(36**10).to_s(36)}"
         if scheme == 'sftp' then
         else
-          if fetch (uri, install) then
+          if (fetch(uri, install)) then
             puts "Unable to download file #{uri}"
             exit 1
           end
@@ -142,7 +142,7 @@ end
 
 def createhds! (array, hds)
   hds.keys.each do |key|
-    array << ["VBoxManage", "createhd", "--filename", key, "--size", hds[key]]
+    array << ["VBoxManage", "createhd", "--filename", key, "--size", hds[key].to_s]
   end
   array
 end
@@ -164,7 +164,7 @@ else
   name = ARGV.shift
   IO.popen ["VBoxManage", "list", "vms"] do |result|
     result.each_line do |line|
-      if result.split[1] == "\"#{name}\"" then
+      if line.split[1] == "\"#{name}\"" then
         puts "VM with such name already exists!"
 	exit 1
       end
@@ -193,8 +193,8 @@ if ostype == '' then
   exit 1
 end
 
-commands = registerdevs! (createhds! ([["VBoxManage", "createvm", "--name", name, "--ostype", ostype, "--register"], ["VBoxManage", "storagectl", name, "--name", "#{name}hdd", "--add", "sata", "--controller", "IntelAHCI", "--bootable", "on"]], disks), devices)
-commands << ["VBoxManage", "modifyvm", name, "--memory", mem.to_s, "--cpus", cpus.to_s, "--floppy", "disabled", "--audio", "none", "--vram", 4.to_s, "--accelerate3d", "off", "--acpi", "on", "--vrdeproperty", "VNCPassword=1"]
+commands = registerdevs!(createhds!([["VBoxManage", "createvm", "--name", name, "--ostype", ostype, "--register"], ["VBoxManage", "storagectl", name, "--name", "#{name}hdd", "--add", "sata", "--controller", "IntelAHCI", "--bootable", "on"]], disks), devices)
+commands << ["VBoxManage", "modifyvm", name, "--memory", mem.to_s, "--cpus", cpus.to_s, "--floppy", "disabled", "--audio", "none", "--vram", "4", "--accelerate3d", "off", "--acpi", "on", "--vrdeproperty", "VNCPassword=1", "--vrdeaddress", ip, "--vrdeport", port.to_s, "--vrde", "on"]
 
 if nics.length > 0 then
   nic = ["VBoxManage", "modifyvm", name]
@@ -207,15 +207,15 @@ end
 
 keys = disks.keys
 keys.each_index do |i|
-  commands << ["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", keys[i], "--port", i, "--type", "hdd"]
+  commands << ["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", keys[i], "--port", i.to_s, "--type", "hdd"]
 end
 keys = devices.keys
 keys.each_index do |i|
-  commands << ["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", keys[i], "--port", i + disks.size, "--type", "hdd"]
+  commands << ["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", keys[i], "--port", (i + disks.size + 1).to_s, "--type", "hdd"]
 end
-commands << ["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", install, "--port", disks.size, "--type", "dvddrive"]
+commands << ["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", install, "--port", disks.size.to_s, "--type", "dvddrive"]
 commands << ["VBoxManage", "modifyvm", name, "--boot1", "dvd"] << ["VBoxManage", "modifyvm", name, "--boot2", "disk"]
-commands << ["VBoxHeadless", "--startvm", "", name, "-v", "on", "-e", "'TCP/Address=#{ip}'", "-e", "'TCP/Ports=#{port}'", "--settingspw", "1"]
+commands << ["VBoxHeadless", "--startvm", name, "--settingspw", "1"]
 
 def run(cmds)
   if cmds.empty? then
@@ -232,6 +232,8 @@ def run(cmds)
   end
 end
 
+puts "Using port #{port}"
+
 if run(commands.reverse) then
-  launch(["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", "emptydrive", "--port", disks.size, "--type", "dvddrive"])
+  launch(["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", "emptydrive", "--port", disks.size.to_s, "--type", "dvddrive"])
 end
