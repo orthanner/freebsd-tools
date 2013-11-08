@@ -9,13 +9,15 @@ require 'net/sftp'
 include Process
 
 parser = GetoptLong.new
-parser.set_options ['-i', '--image', GetoptLong::REQUIRED_ARGUMENT], ['-t', '--ostype', GetoptLong::REQUIRED_ARGUMENT], ['-m', '--ram', GetoptLong::REQUIRED_ARGUMENT], ['-p', '--cpus', GetoptLong::REQUIRED_ARGUMENT], ['-N', '--nic', GetoptLong::REQUIRED_ARGUMENT], ['-I', '--install', GetoptLong::REQUIRED_ARGUMENT], ['-P', '--port', GetoptLong::REQUIRED_ARGUMENT], ['-v', '--vrdeip', GetoptLong::REQUIRED_ARGUMENT], ['-h', '--help', GetoptLong::NO_ARGUMENT]
+parser.set_options ['-i', '--image', GetoptLong::REQUIRED_ARGUMENT], ['-d', '--dev', GetoptLong::REQUIRED_ARGUMENT], ['-t', '--ostype', GetoptLong::REQUIRED_ARGUMENT], ['-m', '--ram', GetoptLong::REQUIRED_ARGUMENT], ['-p', '--cpus', GetoptLong::REQUIRED_ARGUMENT], ['-N', '--nic', GetoptLong::REQUIRED_ARGUMENT], ['-I', '--install', GetoptLong::REQUIRED_ARGUMENT], ['-P', '--port', GetoptLong::REQUIRED_ARGUMENT], ['-v', '--vrdeip', GetoptLong::REQUIRED_ARGUMENT], ['-h', '--help', GetoptLong::NO_ARGUMENT]
 
 cpus = 1
 urlregex = /\A[\w]+:\/\/[^\r\n]+\Z/
 diskregex = /\A(?<path>.*):(?<size>[0-9]+)\Z/
+bdevregex = /\A(?<path>.*):(?<type>[a-z]+)\Z/
 name = ''
 disks = {}
+devices = {}
 ostype = ''
 mem = 0
 nics = []
@@ -25,29 +27,32 @@ port = 5900
 
 def usage()
 	puts <<-EOF
-	Usage:
-	 vboxnew arguments name
-	 vboxnew -h
-	Required arguments
-		-i /path/to/disk/image:size, --image /path/to/disk/image:size
-			VirtualBox disk image to attach; possibly a block device, in which case size makes no sense; may occur several times
-		-t type, --ostype type
-			OS type to emulate; run "VBoxManage list ostypes" to see possible variants; may occur only once
-		-m size, --ram size
-			RAM available to the VM; may occur only once
-		-N nic, --nic nic
-			network interface to attach; may occur several times
-		-I filename, --install filename
-			installation medium to use; may occur only once
-		-P num, --port num
-			port to use for VNC console
-		-v ip, --vrdeip ip
-			IP address to bind VRDE to
-	Optional arguments
-		-p num, --cpus num
-			amount of CPUs to use for the VM; may occur only once
-		-h, --help
-			show this message
+Usage:
+ vboxnew arguments name
+ vboxnew -h
+Required arguments
+ -t type, --ostype type
+	OS type to emulate; run "VBoxManage list ostypes" to see possible variants; may occur only once
+ -m size, --ram size
+	RAM available to the VM; may occur only once
+ -N nic, --nic nic
+	network interface to attach; may occur several times
+ -I filename, --install filename
+	installation medium to use; may occur only once
+ -P num, --port num
+	port to use for VNC console
+ -v ip, --vrdeip ip
+	IP address to bind VRDE to
+Optional arguments
+ -d /path/to/block/device:type, --dev /path/to/block/device:type
+	block device to attach
+ -i /path/to/disk/image:size, --image /path/to/disk/image:size
+	VirtualBox disk image to attach; possibly a block device, in which case size makes no sense; may occur several times
+ -p num, --cpus num
+	amount of CPUs to use for the VM; may occur only once
+ -h, --help
+	show this message
+At least one disk image or block device must be specified
 	EOF
 end
 
@@ -85,131 +90,148 @@ def launch (args)
 	$?.exitstatus
 end
 
-
 loop do
-	begin
-		opt, arg = parser.get
-		break if not opt
-		case opt
-			when '-i'
-				diskregex.match (arg) do |data|
-					disks[data['path']] = data['size'].to_i
-				end
-			when '-t'
-				ostype = arg
-			when '-m'
-				mem = arg.to_i
-			when '-p'
-				cpus = arg.to_i if arg.to_i > 1
-			when '-N'
-				nics << arg
-			when '-I'
-				uri = URI(arg)
-				if uri.scheme then
-					install = '/tmp/' + rand(36**10).to_s(36)
-					if scheme == 'sftp' then
-					else
-						if fetch (uri, install) then
-							puts "Unable to download file #{uri}"
-							exit 1
-						end
-					end
-				else
-					install = arg
-				end
-			when '-P'
-				port = arg.to_i
-			when '-v'
-				ip = arg
-			when '-h'
-				usage
-				exit 0
-		end
-	rescue => error
-		puts error
-		usage
-		exit 1
-	end
+  begin
+    opt, arg = parser.get
+    break if not opt
+    case opt
+    when '-i'
+      diskregex.match (arg) do |data|
+        disks[data['path']] = data['size'].to_i
+      end
+    when '-d'
+      bdevregex.match (arg) do |data|
+        disks[data['path']] = data['type']
+      end
+    when '-t'
+      ostype = arg
+    when '-m'
+      mem = arg.to_i
+    when '-p'
+      cpus = arg.to_i if arg.to_i > 1
+    when '-N'
+      nics << arg
+    when '-I'
+      uri = URI(arg)
+      if uri.scheme then
+        install = "/tmp/#{rand(36**10).to_s(36)}"
+        if scheme == 'sftp' then
+        else
+          if fetch (uri, install) then
+            puts "Unable to download file #{uri}"
+            exit 1
+          end
+        end
+      else
+        install = arg
+      end
+    when '-P'
+      port = arg.to_i
+    when '-v'
+      ip = arg
+    when '-h'
+      usage
+      exit 0
+    end
+  rescue => error
+    puts error
+    usage
+    exit 1
+end
 end
 
 def createhds! (array, hds)
-	hds.keys.each do |key|
-		array << ["VBoxManage", "createhd", "--filename", key, "--size", hds[key]]
-	end
-	array
+  hds.keys.each do |key|
+    array << ["VBoxManage", "createhd", "--filename", key, "--size", hds[key]]
+  end
+  array
+end
+
+def registerdevs! (array, devs)
+  devs.keys.each_index do |i|
+    device = devs.keys[i]
+    disk = Pathname.new "/var/vm/#{name}/#{devs[device]}#{device}"
+    disk.parent.mkpath
+    array << ["VBoxManage", "internalcommands", "createrawvmdk", "--filename", device, "--rawdisk", disk]
+  end
+  array
 end
 
 if ARGV.length < 1
-	puts 'Name must be specified'
-	usage
+  puts 'Name must be specified'
+  usage
 else
-	name = ARGV.shift
-	IO.popen ["VBoxManage", "list", "vms"] do |result|
-		result.each_line do |line|
-			if result.split[1] == "\"#{name}\"" then
-				puts "VM with such name already exists!"
-				exit 1
-			end
-		end
-	end
+  name = ARGV.shift
+  IO.popen ["VBoxManage", "list", "vms"] do |result|
+    result.each_line do |line|
+      if result.split[1] == "\"#{name}\"" then
+        puts "VM with such name already exists!"
+	exit 1
+      end
+    end
+  end
 end
 
 if not File.exists?(install) then
-	puts 'Installation media is not specified or does not exist! cannot continue'
-	exit 1
+  puts 'Installation media is not specified or does not exist! cannot continue'
+  exit 1
 end
 
 if disks.empty? then
-	vmd = "/var/vm/#{name}.vdi"
-	if not File.exists?(vmd) then
-		print "Please specify the system disk size (in megabytes) for the newly created VM: "
-		disks[vmd] = gets.to_i
-	else
-		puts "Virtual disk file #{vmd} already exists! cannot continue"
-		exit 1
-	end
+  vmd = "/var/vm/#{name}.vdi"
+  if not File.exists?(vmd) then
+    print "Please specify the system disk size (in megabytes) for the newly created VM: "
+    disks[vmd] = gets.to_i
+  else
+    puts "Virtual disk file #{vmd} already exists! cannot continue"
+    exit 1
+  end
 end
 
 if ostype == '' then
-	puts "OS type must be specified"
-	exit 1
+  puts "OS type must be specified"
+  exit 1
 end
 
-commands = createhds [["VBoxManage", "createvm", "--name", name, "--ostype", ostype, "--register"], ["VBoxManage", "storagectl", name, "--name", "#{name}hdd", "--add", "sata", "--controller", "IntelAHCI", "--bootable", "on"]], disks
+commands = registerdevs! (createhds! ([["VBoxManage", "createvm", "--name", name, "--ostype", ostype, "--register"], ["VBoxManage", "storagectl", name, "--name", "#{name}hdd", "--add", "sata", "--controller", "IntelAHCI", "--bootable", "on"]], disks), devices)
 commands << ["VBoxManage", "modifyvm", name, "--memory", mem.to_s, "--cpus", cpus.to_s, "--floppy", "disabled", "--audio", "none", "--vram", 4.to_s, "--accelerate3d", "off", "--acpi", "on", "--vrdeproperty", "VNCPassword=1"]
 
 if nics.length > 0 then
-	nic = ["VBoxManage", "modifyvm", name]
-	nics.each_index do |i|
-		n = i+1
-		nic << "--nic#{n}" << "bridged" << "--bridgeadapter#{n}" << nics[i] << "--cableconnected#{n}" << "on"
-	end
-	commands << nic
+  nic = ["VBoxManage", "modifyvm", name]
+  nics.each_index do |i|
+    n = i+1
+    nic << "--nic#{n}" << "bridged" << "--bridgeadapter#{n}" << nics[i] << "--cableconnected#{n}" << "on"
+  end
+  commands << nic
 end
 
 keys = disks.keys
 keys.each_index do |i|
-	commands << ["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", keys[i], "--port", i, "--type", "hdd"]
+  commands << ["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", keys[i], "--port", i, "--type", "hdd"]
+end
+keys = devices.keys
+keys.each_index do |i|
+  commands << ["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", keys[i], "--port", i + disks.size, "--type", "hdd"]
 end
 commands << ["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", install, "--port", disks.size, "--type", "dvddrive"]
 commands << ["VBoxManage", "modifyvm", name, "--boot1", "dvd"] << ["VBoxManage", "modifyvm", name, "--boot2", "disk"]
 commands << ["VBoxHeadless", "--startvm", "", name, "-v", "on", "-e", "'TCP/Address=#{ip}'", "-e", "'TCP/Ports=#{port}'", "--settingspw", "1"]
 
 def run(cmds)
-	if cmds.empty? then
-		true
-	else
-		cmd = cmds.pop
-		if launch(cmd) then
-			run(cmds)
-		else
-			puts "Failed to run command:"
-			puts cmd
-			false
-		end
-	end
+  if cmds.empty? then
+    true
+  else
+    cmd = cmds.pop
+    if launch(cmd) then
+      run(cmds)
+    else
+      puts "Failed to run command:"
+      puts cmd
+      false
+    end
+  end
 end
 
 if run(commands.reverse) then
-	launch(["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", "emptydrive", "--port", disks.size, "--type", "dvddrive"])
+  launch(["VBoxManage", "storageattach", name, "--storagectl", "#{name}hdd", "--medium", "emptydrive", "--port", disks.size, "--type", "dvddrive"])
 end
