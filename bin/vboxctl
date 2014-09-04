@@ -1,22 +1,22 @@
 #!/bin/sh
 
 case "$1" in
-    start))
+    start)
     VBoxManage startvm "$2" --type headless
     ;;
-    stop))
+    stop)
     VBoxManage controlvm "$2" savestate
     ;;
-    status))
+    status)
     echo -n "$2 status: "
-    VBoxManage showvminfo $2 | grep -i ^state | awk '{print $2;}'
+    VBoxManage showvminfo "$2" | grep -i ^state | awk '{print $2;}'
     ;;
-    restart))
+    restart)
     VBoxManage controlvm "$2" savestate
     sleep 2
     VBoxManage startvm "$2" --type headless
     ;;
-    *))
+    *)
     echo "Usage: $0 start|stop|restart|status"
     ;;
 esac
